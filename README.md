@@ -48,7 +48,8 @@ if err != nil {
 }
 
 var i uint32
-for i = 0; i < enc.BaseSymbolsNum(); i++ {
+// base symbols +5% recovery
+for i = 0; i < enc.BaseSymbolsNum()+enc.BaseSymbolsNum()/20; i++ {
   send(enc.GenSymbol(i))
 }
 

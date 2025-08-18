@@ -80,7 +80,7 @@ func (p *raptorParams) getDegree(v uint32) uint32 {
 	panic("should be unreachable")
 }
 
-func (p *raptorParams) calcEncodingRow(x uint32) *encodingRow {
+func (p *raptorParams) calcEncodingRow(x uint32) encodingRow {
 	ja := 53591 + p._J*997
 	if ja%2 == 0 {
 		ja++
@@ -103,7 +103,7 @@ func (p *raptorParams) calcEncodingRow(x uint32) *encodingRow {
 	a1 := 1 + random(x, 4, p._P1-1)
 	b1 := random(x, 5, p._P1)
 
-	return &encodingRow{
+	return encodingRow{
 		d:  d,
 		a:  a,
 		b:  b,
@@ -183,7 +183,8 @@ func (r *encodingRow) encodeGen(m, relaxed *discmath.MatrixGF256, p *raptorParam
 
 func (p *raptorParams) genSymbol(relaxed *discmath.MatrixGF256, symbolSz, id uint32) []byte {
 	m := discmath.NewMatrixGF256(1, symbolSz)
-	p.calcEncodingRow(id).encodeGen(m, relaxed, p)
+	row := p.calcEncodingRow(id)
+	row.encodeGen(m, relaxed, p)
 
 	return m.GetRow(0)
 }

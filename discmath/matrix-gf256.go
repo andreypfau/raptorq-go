@@ -143,3 +143,15 @@ func (m *MatrixGF256) GetRows(buf []uint32, row uint32) []uint32 {
 	}
 	return buf
 }
+
+func (m *MatrixGF256) ApplyRCPermutation(rPerm, cPerm []uint32) *MatrixGF256 {
+	res := NewMatrixGF256(m.RowsNum(), m.ColsNum())
+	for i, val := range m.Data {
+		if val != 0 {
+			row := uint32(i) / m.Cols
+			col := uint32(i) % m.Cols
+			res.Set(rPerm[row], cPerm[col], val)
+		}
+	}
+	return res
+}

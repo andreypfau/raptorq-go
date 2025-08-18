@@ -25,9 +25,9 @@ func (p *raptorParams) createD(symbols []Symbol) *discmath.MatrixGF256 {
 func (p *raptorParams) Solve(symbols []Symbol) (*discmath.MatrixGF256, error) {
 	d := p.createD(symbols)
 
-	eRows := make([]*encodingRow, 0, len(symbols))
-	for _, symbol := range symbols {
-		eRows = append(eRows, p.calcEncodingRow(symbol.ID))
+	eRows := make([]encodingRow, len(symbols))
+	for i, symbol := range symbols {
+		eRows[i] = p.calcEncodingRow(symbol.ID)
 	}
 
 	aUpper := discmath.NewMatrixGF256(p._S+uint32(len(eRows)), p._L)
@@ -58,8 +58,8 @@ func (p *raptorParams) Solve(symbols []Symbol) (*discmath.MatrixGF256, error) {
 	}
 
 	// Encode
-	for ri, row := range eRows {
-		row.encode(aUpper, uint32(ri), p)
+	for ri := range eRows {
+		eRows[ri].encode(aUpper, uint32(ri), p)
 	}
 
 	uSize, rowPermutation, colPermutation := inactivateDecode(aUpper, p._P)

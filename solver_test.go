@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"testing"
+	"time"
 )
 
 func Test_Encode(t *testing.T) {
@@ -52,6 +53,58 @@ func Test_EncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal("decode err", err)
 	}
+
+	if !bytes.Equal(data, str) {
+		t.Fatal("initial data not eq decoded")
+	}
+}
+
+func Test_EncodeDecodeBig(t *testing.T) {
+	str := make([]byte, 4<<20) // 4mb
+	_, _ = rand.Read(str)
+
+	r := NewRaptorQ(768)
+	enc, err := r.CreateEncoder(str)
+	if err != nil {
+		panic(err)
+	}
+
+	dec, err := r.CreateDecoder(uint32(len(str)))
+	if err != nil {
+		panic(err)
+	}
+
+	// add half fast symbols
+	for i := uint32(0); i < enc.BaseSymbolsNum()-1; i++ {
+		sx := enc.GenSymbol(i)
+
+		_, err := dec.AddSymbol(i, sx)
+		if err != nil {
+			t.Fatal("add symbol err", err)
+		}
+	}
+
+	// add half slow symbols
+	for i := uint32(0); i < 1; i++ {
+		sx := enc.GenSymbol(i + enc.BaseSymbolsNum())
+
+		_, err := dec.AddSymbol(i+enc.BaseSymbolsNum(), sx)
+		if err != nil {
+			t.Fatal("add symbol err", err)
+		}
+	}
+
+	tm := time.Now()
+	ok, data, err := dec.Decode()
+	if err != nil {
+		t.Fatal("decode err", err)
+	}
+
+	if !ok {
+		t.Fatal("not decoded")
+	}
+
+	println(time.Since(tm).String())
 
 	if !bytes.Equal(data, str) {
 		t.Fatal("initial data not eq decrypted")

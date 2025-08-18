@@ -88,6 +88,18 @@ func (m *MatrixGF256) ApplyPermutation(permutation []uint32) *MatrixGF256 {
 	return res
 }
 
+func (m *MatrixGF256) ApplyRCPermutation(rPerm, cPerm []uint32) *MatrixGF256 {
+	res := NewMatrixGF256(m.RowsNum(), m.ColsNum())
+	for i, val := range m.Data {
+		if val != 0 {
+			row := uint32(i) / m.Cols
+			col := uint32(i) % m.Cols
+			res.Set(rPerm[row], cPerm[col], val)
+		}
+	}
+	return res
+}
+
 func (m *MatrixGF256) MulSparse(s *MatrixGF256) *MatrixGF256 {
 	mg := NewMatrixGF256(s.RowsNum(), m.ColsNum())
 	for i, val := range s.Data {

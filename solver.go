@@ -25,9 +25,9 @@ func (p *raptorParams) createD(symbols []Symbol) *discmath.MatrixGF256 {
 func (p *raptorParams) Solve(symbols []Symbol) (*discmath.MatrixGF256, error) {
 	d := p.createD(symbols)
 
-	eRows := make([]*encodingRow, 0, len(symbols))
-	for _, symbol := range symbols {
-		eRows = append(eRows, p.calcEncodingRow(symbol.ID))
+	eRows := make([]encodingRow, len(symbols))
+	for i, symbol := range symbols {
+		eRows[i] = p.calcEncodingRow(symbol.ID)
 	}
 
 	aUpper := discmath.NewMatrixGF256(p._S+uint32(len(eRows)), p._L)
@@ -58,8 +58,8 @@ func (p *raptorParams) Solve(symbols []Symbol) (*discmath.MatrixGF256, error) {
 	}
 
 	// Encode
-	for ri, row := range eRows {
-		row.encode(aUpper, uint32(ri), p)
+	for ri := range eRows {
+		eRows[ri].encode(aUpper, uint32(ri), p)
 	}
 
 	uSize, rowPermutation, colPermutation := inactivateDecode(aUpper, p._P)
@@ -73,29 +73,7 @@ func (p *raptorParams) Solve(symbols []Symbol) (*discmath.MatrixGF256, error) {
 	rPermutation := inversePermutation(rowPermutation)
 	cPermutation := inversePermutation(colPermutation)
 
-	aUpperMutRow := discmath.NewMatrixGF256(aUpper.RowsNum(), aUpper.ColsNum())
-	for i, val := range aUpper.Data {
-		if val != 0 {
-			row := uint32(i) / aUpper.Cols
-			col := uint32(i) % aUpper.Cols
-
-			// TODO: do in place?
-			aUpperMutRow.Set(rPermutation[row], col, 1)
-		}
-	}
-	aUpper = aUpperMutRow
-
-	aUpperMutCol := discmath.NewMatrixGF256(aUpper.RowsNum(), aUpper.ColsNum())
-	for i, val := range aUpper.Data {
-		if val != 0 {
-			row := uint32(i) / aUpper.Cols
-			col := uint32(i) % aUpper.Cols
-
-			// TODO: do in place?
-			aUpperMutCol.Set(row, cPermutation[col], 1)
-		}
-	}
-	aUpper = aUpperMutCol
+	aUpper = aUpper.ApplyRCPermutation(rPermutation, cPermutation)
 
 	e := aUpper.ToGF2(0, uSize, uSize, p._L-uSize)
 

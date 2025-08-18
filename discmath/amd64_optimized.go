@@ -4,6 +4,7 @@ package discmath
 
 import "unsafe"
 
+//go:noescape
 func asmSSE2XORBlocks(x, y unsafe.Pointer, blocks int)
 
 func OctVecAdd(x, y []byte) {
@@ -22,8 +23,12 @@ func OctVecAdd(x, y []byte) {
 		)
 	}
 
-	// xor rest bytes
-	for i := blocks * 16; i < n; i++ {
+	// xor rest using 64-bit chunks first
+	i := blocks * 16
+	for ; i+8 <= n; i += 8 {
+		*(*uint64)(unsafe.Pointer(&x[i])) ^= *(*uint64)(unsafe.Pointer(&y[i]))
+	}
+	for ; i < n; i++ {
 		x[i] ^= y[i]
 	}
 }

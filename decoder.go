@@ -12,10 +12,8 @@ type Decoder struct {
 	fastNum uint32
 	slowNum uint32
 
-	payload             []byte
-	payloadSymbolBitmap []byte
-
-	slowSymbols map[uint32][]byte
+	slowSymbols map[uint32]*Symbol
+	fastSynbols []*Symbol
 
 	pm *raptorParams
 }
@@ -27,12 +25,11 @@ func (r *RaptorQ) CreateDecoder(dataSize uint32) (*Decoder, error) {
 	}
 
 	return &Decoder{
-		symbolSz:            r.symbolSz,
-		pm:                  param,
-		payload:             make([]byte, param._K*r.symbolSz),
-		payloadSymbolBitmap: make([]byte, param._K/8+1),
-		dataSz:              dataSize,
-		slowSymbols:         make(map[uint32][]byte),
+		symbolSz:    r.symbolSz,
+		pm:          param,
+		dataSz:      dataSize,
+		slowSymbols: make(map[uint32]*Symbol),
+		fastSynbols: make([]*Symbol, param._K),
 	}, nil
 }
 
@@ -43,14 +40,17 @@ func (d *Decoder) AddSymbol(id uint32, data []byte) (bool, error) {
 
 	if id < d.pm._K {
 		// add fast symbol
-		if d.payloadSymbolBitmap[id/8]&(1<<(id%8)) != 0 {
+		if d.fastSynbols[id] != nil {
 			return d.fastNum+d.slowNum >= d.pm._K, nil
 		}
-		d.payloadSymbolBitmap[id/8] |= 1 << (id % 8)
+		cp := make([]byte, d.symbolSz)
+		copy(cp, data)
+		d.fastSynbols[id] = &Symbol{ID: id, Data: cp}
 		d.fastNum++
-		copy(d.payload[id*d.symbolSz:], data)
 	} else if _, ok := d.slowSymbols[id]; !ok {
-		d.slowSymbols[id] = append([]byte{}, data...)
+		cp := make([]byte, d.symbolSz)
+		copy(cp, data)
+		d.slowSymbols[id] = &Symbol{ID: id, Data: cp}
 		d.slowNum++
 	}
 
@@ -66,70 +66,55 @@ func (d *Decoder) Decode() (bool, []byte, error) {
 		return false, nil, fmt.Errorf("not enough symbols to decode")
 	}
 
-	if d.fastNum < d.pm._K {
-		sz := d.pm._K + uint32(len(d.slowSymbols))
-		if sz < d.pm._KPadded {
-			sz = d.pm._KPadded
-		}
+	// Build system for Solve from known symbols (no payload copy).
+	sz := d.pm._K + uint32(len(d.slowSymbols))
+	if sz < d.pm._KPadded {
+		sz = d.pm._KPadded
+	}
+	toRelax := make([]Symbol, 0, sz)
 
-		toRelax := make([]Symbol, 0, sz)
-
-		buf := make([]byte, len(d.payload))
-		copy(buf, d.payload)
-
-		// add known symbols
-		for k := uint32(0); k < d.pm._K; k++ {
-			if d.payloadSymbolBitmap[k/8]&(1<<(k%8)) == 0 {
-				continue
-			}
-
-			off := k * d.symbolSz
-			toRelax = append(toRelax, Symbol{
-				ID:   k,
-				Data: buf[off : off+d.symbolSz],
-			})
-		}
-
-		for k, v := range d.slowSymbols {
-			data := make([]byte, len(v))
-			copy(data, v)
-
-			if k >= d.pm._K {
-				// add offset for additional symbols
-				k = k + d.pm._KPadded - d.pm._K
-			}
-
-			toRelax = append(toRelax, Symbol{
-				ID:   k,
-				Data: data,
-			})
-		}
-
-		// add padding empty symbols
-		for i := uint32(len(toRelax)); i < d.pm._KPadded; i++ {
-			zero := make([]byte, d.symbolSz)
-			toRelax = append(toRelax, Symbol{
-				ID:   i,
-				Data: zero,
-			})
-		}
-
-		// we have not all fast symbols, try to recover them from slow
-		relaxed, err := d.pm.Solve(toRelax)
-		if err != nil {
-			if errors.Is(err, ErrNotEnoughSymbols) {
-				return false, nil, nil
-			}
-			return false, nil, fmt.Errorf("failed to relax known symbols, err: %w", err)
-		}
-
-		for i := uint32(0); i < d.pm._K; i++ {
-			if d.payloadSymbolBitmap[i/8]&(1<<(i%8)) != 0 {
-				continue
-			}
-			copy(d.payload[i*d.symbolSz:], d.pm.genSymbol(relaxed, d.symbolSz, i))
+	// add known symbols
+	for i := uint32(0); i < d.pm._K; i++ {
+		if s := d.fastSynbols[i]; s != nil {
+			toRelax = append(toRelax, *s)
 		}
 	}
 
-	return true, d.payload[:d.dataSz], nil
+	for k, v := range d.slowSymbols {
+		if k >= d.pm._K {
+			// add offset for additional symbols
+			k = k + d.pm._KPadded - d.pm._K
+		}
+		toRelax = append(toRelax, Symbol{ID: k, Data: v.Data})
+	}
+
+	// add padding empty symbols
+	for i := uint32(len(toRelax)); i < d.pm._KPadded; i++ {
+		zero := make([]byte, d.symbolSz)
+		toRelax = append(toRelax, Symbol{
+			ID:   i,
+			Data: zero,
+		})
+	}
+
+	// we have not all fast symbols, try to recover them from slow
+	relaxed, err := d.pm.Solve(toRelax)
+	if err != nil {
+		if errors.Is(err, ErrNotEnoughSymbols) {
+			return false, nil, nil
+		}
+		return false, nil, fmt.Errorf("failed to relax known symbols, err: %w", err)
+	}
+
+	out := make([]byte, d.pm._K*d.symbolSz)
+	for i := uint32(0); i < d.pm._K; i++ {
+		off := i * d.symbolSz
+		if s := d.fastSynbols[i]; s != nil {
+			copy(out[off:off+d.symbolSz], s.Data)
+		} else {
+			copy(out[off:off+d.symbolSz], d.pm.genSymbol(relaxed, d.symbolSz, i))
+		}
+	}
+
+	return true, out[:d.dataSz], nil
 }

@@ -12,8 +12,8 @@ type Decoder struct {
 	fastNum uint32
 	slowNum uint32
 
+	fastSymbols []*Symbol
 	slowSymbols map[uint32]*Symbol
-	fastSynbols []*Symbol
 
 	pm *raptorParams
 }
@@ -28,8 +28,8 @@ func (r *RaptorQ) CreateDecoder(dataSize uint32) (*Decoder, error) {
 		symbolSz:    r.symbolSz,
 		pm:          param,
 		dataSz:      dataSize,
+		fastSymbols: make([]*Symbol, param._K),
 		slowSymbols: make(map[uint32]*Symbol),
-		fastSynbols: make([]*Symbol, param._K),
 	}, nil
 }
 
@@ -40,12 +40,12 @@ func (d *Decoder) AddSymbol(id uint32, data []byte) (bool, error) {
 
 	if id < d.pm._K {
 		// add fast symbol
-		if d.fastSynbols[id] != nil {
+		if d.fastSymbols[id] != nil {
 			return d.fastNum+d.slowNum >= d.pm._K, nil
 		}
 		cp := make([]byte, d.symbolSz)
 		copy(cp, data)
-		d.fastSynbols[id] = &Symbol{ID: id, Data: cp}
+		d.fastSymbols[id] = &Symbol{ID: id, Data: cp}
 		d.fastNum++
 	} else if _, ok := d.slowSymbols[id]; !ok {
 		cp := make([]byte, d.symbolSz)
@@ -75,7 +75,7 @@ func (d *Decoder) Decode() (bool, []byte, error) {
 
 	// add known symbols
 	for i := uint32(0); i < d.pm._K; i++ {
-		if s := d.fastSynbols[i]; s != nil {
+		if s := d.fastSymbols[i]; s != nil {
 			toRelax = append(toRelax, *s)
 		}
 	}
@@ -109,7 +109,7 @@ func (d *Decoder) Decode() (bool, []byte, error) {
 	out := make([]byte, d.pm._K*d.symbolSz)
 	for i := uint32(0); i < d.pm._K; i++ {
 		off := i * d.symbolSz
-		if s := d.fastSynbols[i]; s != nil {
+		if s := d.fastSymbols[i]; s != nil {
 			copy(out[off:off+d.symbolSz], s.Data)
 		} else {
 			copy(out[off:off+d.symbolSz], d.pm.genSymbol(relaxed, d.symbolSz, i))

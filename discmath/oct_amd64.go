@@ -48,6 +48,13 @@ func OctVecAdd(x, y []byte) {
 	}
 }
 
+func OctVecMul(vector []byte, multiplier uint8) {
+	table := _MulPreCalc[multiplier]
+	for i := 0; i < len(vector); i++ {
+		vector[i] = table[vector[i]]
+	}
+}
+
 func OctVecMulAdd(x, y []byte, multiplier uint8) {
 	n := len(x)
 	if n == 0 {

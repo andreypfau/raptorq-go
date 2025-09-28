@@ -1,22 +1,14 @@
-//go:build !amd64
+//go:build arm64 && !purego
 
 package discmath
 
 import "unsafe"
 
-func OctVecAdd(x, y []byte) {
-	n := len(x)
-	xUint64 := *(*[]uint64)(unsafe.Pointer(&x))
-	yUint64 := *(*[]uint64)(unsafe.Pointer(&y))
+//go:noescape
+func OctVecAdd(x, y []byte)
 
-	for i := 0; i < n/8; i++ {
-		xUint64[i] ^= yUint64[i]
-	}
-
-	for i := n - n%8; i < n; i++ {
-		x[i] ^= y[i]
-	}
-}
+//go:noescape
+func OctVecMul(vector []byte, multiplier uint8)
 
 func OctVecMulAdd(x, y []byte, multiplier uint8) {
 	n := len(x)

@@ -179,6 +179,91 @@ func TestOctVecMul_Stress(t *testing.T) {
 	}
 }
 
-func TestOctVecMul_test(t *testing.T) {
-	OctVecMul([]byte{1, 2, 3, 4, 5}, 0x02)
+func OctVecMulAdd_generic(x, y []byte, multiplier byte) {
+	for i := 0; i < len(x); i++ {
+		x[i] ^= OctMul(y[i], multiplier)
+	}
+}
+
+func TestOctVecMulAdd(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	sizes := []int{
+		1, 2, 3, 4, 5, 6, 7, 8, 9,
+		14, 15, 16, 17,
+		31, 32, 33,
+		63, 64, 65,
+		127, 128, 129,
+		255, 256, 257,
+		768, 4096,
+	}
+	mults := []byte{0x00, 0x01, 0x02, 0x03, 0x1b, 0x53, 0x80, 0x8d, 0xff}
+
+	const iters = 3
+
+	for _, n := range sizes {
+		for iter := 0; iter < iters; iter++ {
+			x := make([]byte, n)
+			y := make([]byte, n)
+			for i := 0; i < n; i++ {
+				x[i] = byte(rng.Intn(256))
+				y[i] = byte(rng.Intn(256))
+			}
+
+			for _, m := range mults {
+				// 1) Distinct slices
+				x1 := append([]byte(nil), x...)
+				y1 := append([]byte(nil), y...)
+				want := append([]byte(nil), x1...)
+				OctVecMulAdd_generic(want, y1, m)
+
+				OctVecMulAdd(x1, y1, m)
+
+				if !bytes.Equal(x1, want) {
+					idx := -1
+					for i := range x1 {
+						if x1[i] != want[i] {
+							idx = i
+							break
+						}
+					}
+					t.Fatalf("mismatch (n=%d, m=0x%02x, iter=%d) at idx=%d: got=0x%02x want=0x%02x\nx1=%v\ny1=%v\nwant=%v",
+						n, m, iter, idx, x1[idx], want[idx], x1, y1, want)
+				}
+
+				z := append([]byte(nil), x...)
+				zWant := append([]byte(nil), z...)
+				OctVecMulAdd_generic(zWant, z, m)
+
+				OctVecMulAdd(z, z, m)
+
+				if !bytes.Equal(z, zWant) {
+					idx := -1
+					for i := range z {
+						if z[i] != zWant[i] {
+							idx = i
+							break
+						}
+					}
+					t.Fatalf("aliasing mismatch (x==y) (n=%d, m=0x%02x, iter=%d) at idx=%d: got=0x%02x want=0x%02x\nz(got)=%v\nz(want)=%v",
+						n, m, iter, idx, z[idx], zWant[idx], z, zWant)
+				}
+			}
+		}
+	}
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	n := 257 + r.Intn(64)
+	x := make([]byte, n)
+	y := make([]byte, n)
+	for i := range x {
+		x[i] = byte(r.Intn(256))
+		y[i] = byte(r.Intn(256))
+	}
+	m := byte(r.Intn(256))
+	want := append([]byte(nil), x...)
+	OctVecMulAdd_generic(want, y, m)
+	OctVecMulAdd(x, y, m)
+	if !bytes.Equal(x, want) {
+		t.Fatalf("smoke mismatch (n=%d, m=0x%02x)", n, m)
+	}
 }

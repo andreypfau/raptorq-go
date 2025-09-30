@@ -52,17 +52,40 @@ func calcOctMulTable() [256][256]uint8 {
 	return result
 }
 
+var _OctMulLo = calcOctMulLo()
+var _OctMulHi = calcOctMulHi()
+
+func calcOctMulLo() [256][16]uint8 {
+	var t [256][16]uint8
+	for u := 1; u < 256; u++ {
+		for n := 1; n < 16; n++ {
+			t[u][n] = _ExpPreCalc[uint32(_LogPreCalc[n])+uint32(_LogPreCalc[u])]
+		}
+	}
+	return t
+}
+
+func calcOctMulHi() [256][16]uint8 {
+	var t [256][16]uint8
+	for u := 1; u < 256; u++ {
+		for n := 1; n < 16; n++ {
+			t[u][n] = _ExpPreCalc[uint32(_LogPreCalc[n<<4])+uint32(_LogPreCalc[u])]
+		}
+	}
+	return t
+}
+
+func OctMul(x, y uint8) uint8 {
+	if x == 0 || y == 0 {
+		return 0
+	}
+	return _ExpPreCalc[uint32(_LogPreCalc[x])+uint32(_LogPreCalc[y])]
+}
+
 func OctExp(x uint32) uint8 {
 	return _ExpPreCalc[x]
 }
 
 func OctInverse(x uint8) uint8 {
 	return OctExp(uint32(255 - _LogPreCalc[x]))
-}
-
-func OctVecMul(vector []byte, multiplier uint8) {
-	table := _MulPreCalc[multiplier]
-	for i := 0; i < len(vector); i++ {
-		vector[i] = table[vector[i]]
-	}
 }

@@ -1,4 +1,4 @@
-//go:build !amd64
+//go:build (!amd64 && !arm64) || purego
 
 package discmath
 
@@ -15,6 +15,12 @@ func OctVecAdd(x, y []byte) {
 
 	for i := n - n%8; i < n; i++ {
 		x[i] ^= y[i]
+	}
+}
+
+func OctVecMul(vector []byte, multiplier uint8) {
+	for i := 0; i < len(vector); i++ {
+		vector[i] = OctMul(vector[i], multiplier)
 	}
 }
 

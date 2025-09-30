@@ -1,4 +1,4 @@
-//go:build arm64
+//go:build arm64 && !purego
 #include "textflag.h"
 
 // func OctVecAdd(x, y []byte)
